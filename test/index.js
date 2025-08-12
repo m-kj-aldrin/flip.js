@@ -30,4 +30,4 @@ let flip_elements = flip(item_elements);
 
 list_element.insertBefore(item_elements[2], item_elements[0]);
 
-flip_elements.play({ duration: 500 });
+flip_elements.play({ duration: 500, easing: 'ease' });
