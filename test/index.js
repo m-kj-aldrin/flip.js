@@ -1,25 +1,25 @@
-import flip from "../src/flip.js";
+import flip from '../src/flip.js';
 
 let items = [
   {
-    name: "Cat Math",
+    name: 'Cat Math',
   },
   {
-    name: "Dog Bog",
+    name: 'Dog Bog',
   },
   {
-    name: "Bird Nerd",
+    name: 'Bird Nerd',
   },
 ];
 
 function render_item(item) {
-  let item_element = document.createElement("li");
+  let item_element = document.createElement('li');
   item_element.textContent = `name: ${item.name}`;
 
   return item_element;
 }
 
-let list_element = document.createElement("ul");
+let list_element = document.createElement('ul');
 document.body.appendChild(list_element);
 
 let item_elements = items.map(render_item);
@@ -30,4 +30,4 @@ let flip_elements = flip(item_elements);
 
 list_element.insertBefore(item_elements[2], item_elements[0]);
 
-flip_elements.play({ duration: 500, easing: 'ease' });
+flip_elements.play({ duration: 1000, easing: 'cubic-bezier(0.1, 0.2, 0.11, 1)' });

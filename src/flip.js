@@ -1,4 +1,10 @@
 /**
+ * Easing values accepted by the Web Animations API's `easing` option.
+ * Matches the CSS `animation-timing-function` and `transition-timing-function` syntax.
+ * @typedef {("linear"|"ease"|"ease-in"|"ease-out"|"ease-in-out"|"step-start"|"step-end"|`cubic-bezier(${string})`|`steps(${number})`|`steps(${number},start)`|`steps(${number}, end)`|`linear(${string})`)} EasingFunctions
+ */
+
+/**
  * Minimal FLIP utility with translation and optional scale, Promise-based play,
  * reduced-motion support, and basic controls.
  *
@@ -7,7 +13,7 @@
  *   // ...mutate DOM (reorder/insert/remove)
  *   await ctrl.play({ duration: 300 }).finished;
  *
- * @template {HTMLElement[] | Element[] | NodeListOf<HTMLElement> | HTMLCollection} T
+ * @template {HTMLElement[]  | NodeListOf<HTMLElement> | HTMLCollectionOf<HTMLElement> } T
  * @param {T} elements
  */
 export default function flip(elements) {
@@ -19,12 +25,12 @@ export default function flip(elements) {
   /**
    * @typedef {Object} FlipOptions
    * @property {number} [duration=100]
-   * @property {string} [easing='ease']
+   * @property {EasingFunctions} [easing='ease']
    * @property {number} [delay=0]
    * @property {number} [stagger=0]
-   * @property {'none'|'forwards'|'backwards'|'both'|'auto'} [fill='auto']
-   * @property {'normal'|'reverse'|'alternate'|'alternate-reverse'} [direction='normal']
-   * @property {'replace'|'add'|'accumulate'} [composite='add']
+   * @property {FillMode} [fill='auto']
+   * @property {PlaybackDirection} [direction='normal']
+   * @property {CompositeOperation} [composite='add']
    * @property {boolean} [shouldScale=true]
    * @property {boolean} [respectReducedMotion=true]
    * @property {string} [transformOrigin='0 0']
@@ -43,7 +49,7 @@ export default function flip(elements) {
   }
 
   /**
-   * @template {HTMLElement[] | Element[] | NodeListOf<HTMLElement> | HTMLCollection} U
+   * @template {HTMLElement[] | NodeListOf<HTMLElement> | HTMLCollectionOf<HTMLElement>} U
    * @param {U} [newElements]
    */
   function update(newElements) {
@@ -74,6 +80,7 @@ export default function flip(elements) {
    * @returns {{ animations: Animation[]; finished: Promise<void>; cancel: () => void; }}
    */
   function play(options) {
+    /** @type {FlipOptions} */
     const defaultOptions = {
       duration: 100,
       easing: 'ease',
@@ -141,7 +148,8 @@ export default function flip(elements) {
         {
           transformOrigin: opts.transformOrigin,
           transform:
-            `translate(${dx}px, ${dy}px)` + (opts.shouldScale ? ` scale(${scaleX}, ${scaleY})` : ''),
+            `translate(${dx}px, ${dy}px)` +
+            (opts.shouldScale ? ` scale(${scaleX}, ${scaleY})` : ''),
         },
         {
           transformOrigin: opts.transformOrigin,
