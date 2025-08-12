@@ -4,12 +4,16 @@ Tiny FLIP animation utility (translate + optional scale) with Promise-based `pla
 
 ## Install
 
-This repo is a simple project; you can import directly from `src/flip.js`.
+Install from npm:
+
+```bash
+npm install @mkja/flip-motion
+```
 
 ## Usage
 
 ```js
-import flip from './src/flip.js';
+import flip from '@mkja/flip-motion';
 
 const elements = document.querySelectorAll('li');
 const ctrl = flip(elements);

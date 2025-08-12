@@ -1,20 +1,28 @@
 {
-  "name": "flip-motion",
+  "name": "@mkja/flip-motion",
   "version": "0.1.0",
   "description": "Tiny FLIP animation utility (translate + optional scale) with Promise-based play and reduced-motion support.",
   "type": "module",
   "license": "MIT",
   "main": "src/flip.js",
   "module": "src/flip.js",
+  "exports": "./src/flip.js",
+  "types": "dist/flip.d.ts",
   "files": [
-    "src"
+    "src",
+    "dist",
+    "README.md"
   ],
+  "sideEffects": false,
   "scripts": {
     "dev": "vite test",
     "test": "vitest --run",
     "test:watch": "vitest",
     "lint": "eslint .",
-    "format": "prettier -w ."
+    "format": "prettier -w .",
+    "build:types": "tsc -p tsconfig.types.json",
+    "build": "npm run build:types",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",
@@ -22,10 +30,14 @@
     "globals": "^15.11.0",
     "jsdom": "^24.1.0",
     "prettier": "^3.3.3",
+    "typescript": "^5.9.2",
     "vite": "^5.4.2",
     "vitest": "^2.0.5"
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
