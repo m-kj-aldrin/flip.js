@@ -1,11 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import flip from '../src/flip.js';
 
+/** @param {any} rect */
 function createElementWithRect(rect) {
   let currentRect = { ...rect };
   const style = {};
   const calls = [];
 
+  /** @type {any} */
   const el = {
     style,
     getBoundingClientRect: () => ({ ...currentRect }),
@@ -29,7 +31,7 @@ describe('flip', () => {
     const a = createElementWithRect({ left: 0, top: 0, width: 100, height: 50 });
     const b = createElementWithRect({ left: 120, top: 0, width: 100, height: 50 });
 
-    const ctrl = flip([a, b]);
+    const ctrl = flip([/** @type {any} */ (a), /** @type {any} */ (b)]);
 
     // Mutate layout: move a to x=50,y=20 and resize to 200x100; b to x=140
     a.__setRect({ left: 50, top: 20, width: 200, height: 100 });
@@ -57,7 +59,7 @@ describe('flip', () => {
 
   it('resolves finished and refreshes measurements for subsequent plays', async () => {
     const a = createElementWithRect({ left: 0, top: 0, width: 100, height: 50 });
-    const ctrl = flip([a]);
+    const ctrl = flip([/** @type {any} */ (a)]);
 
     a.__setRect({ left: 100, top: 0 });
     await ctrl.play({ duration: 10 }).finished;
@@ -77,7 +79,7 @@ describe('flip', () => {
     const b = createElementWithRect({ left: 10, top: 0, width: 10, height: 10 });
     const c = createElementWithRect({ left: 20, top: 0, width: 10, height: 10 });
 
-    const ctrl = flip([a, b, c]);
+    const ctrl = flip([/** @type {any} */ (a), /** @type {any} */ (b), /** @type {any} */ (c)]);
     a.__setRect({ left: 5 });
     b.__setRect({ left: 15 });
     c.__setRect({ left: 25 });
@@ -107,5 +109,197 @@ describe('flip', () => {
     expect(a.__getAnimateCalls().length).toBe(0);
 
     globalThis.matchMedia = originalMatchMedia;
+  });
+
+  it('fires lifecycle hooks with correct counts and order', async () => {
+    const a = createElementWithRect({ left: 0, top: 0, width: 100, height: 50 });
+    const b = createElementWithRect({ left: 100, top: 0, width: 100, height: 50 });
+
+    const events = [];
+    const ctrl = flip([a, b]);
+
+    // Move both
+    a.__setRect({ left: 10 });
+    b.__setRect({ left: 120 });
+
+    await ctrl
+      .play({
+        duration: 10,
+        onStart: (ctx) => events.push(['start', ctx.count]),
+        onEachStart: (entry) => events.push(['eachStart', entry.index]),
+        onEachFinish: (entry) => events.push(['eachFinish', entry.index]),
+        onFinish: (ctx) => events.push(['finish', ctx.count]),
+      })
+      .finished;
+
+    const kinds = events.map((e) => e[0]);
+    expect(kinds[0]).toBe('start');
+    expect(kinds[kinds.length - 1]).toBe('finish');
+    expect(events.filter((e) => e[0] === 'eachStart').length).toBe(2);
+    expect(events.filter((e) => e[0] === 'eachFinish').length).toBe(2);
+  });
+
+  it('calls hooks even when animations are skipped (duration=0)', async () => {
+    const a = createElementWithRect({ left: 0, top: 0, width: 10, height: 10 });
+    const events = [];
+    const ctrl = flip([a]);
+    a.__setRect({ left: 50 });
+
+    await ctrl
+      .play({ duration: 0, onStart: () => events.push('start'), onFinish: () => events.push('finish') })
+      .finished;
+
+    expect(events).toEqual(['start', 'finish']);
+  });
+
+  it('supports function-based stagger', async () => {
+    const a = createElementWithRect({ left: 0, top: 0, width: 10, height: 10 });
+    const b = createElementWithRect({ left: 10, top: 0, width: 10, height: 10 });
+    const c = createElementWithRect({ left: 20, top: 0, width: 10, height: 10 });
+
+    const ctrl = flip([a, b, c]);
+    a.__setRect({ left: 5 });
+    b.__setRect({ left: 15 });
+    c.__setRect({ left: 25 });
+
+    const stagger = (i, count) => (count - i) * 10; // 30,20,10
+    await ctrl.play({ duration: 10, delay: 100, stagger }).finished;
+
+    expect(a.__getAnimateCalls()[0].options.delay).toBe(130);
+    expect(b.__getAnimateCalls()[0].options.delay).toBe(120);
+    expect(c.__getAnimateCalls()[0].options.delay).toBe(110);
+  });
+
+  it('interrupt: ignore returns the in-flight result', async () => {
+    // Element with controllable finished promise
+    /** @param {any} rect */
+    function createControllableElement(rect) {
+      let currentRect = { ...rect };
+      const style = {};
+      let lastResolve;
+      /** @type {any} */
+      const el = {
+        style,
+        getBoundingClientRect: () => ({ ...currentRect }),
+        animate: () => {
+          return {
+            finished: new Promise((res) => {
+              lastResolve = res;
+            }),
+            cancel: () => {},
+          };
+        },
+        __setRect: (next) => {
+          currentRect = { ...currentRect, ...next };
+        },
+        __resolve: () => lastResolve?.(),
+      };
+      return el;
+    }
+
+    const a = createControllableElement({ left: 0, top: 0, width: 10, height: 10 });
+    const ctrl = flip([/** @type {any} */ (a)]);
+    a.__setRect({ left: 50 });
+
+    const first = ctrl.play({ duration: 10 });
+    const second = ctrl.play({ duration: 10, interrupt: 'ignore' });
+
+    expect(second).toBe(first);
+    a.__resolve();
+    await first.finished;
+  });
+
+  it('interrupt: cancel cancels current animations before starting new', async () => {
+    /** @param {any} rect */
+    function createCancelableElement(rect) {
+      let currentRect = { ...rect };
+      const style = {};
+      let lastResolve;
+      const cancelSpy = vi.fn();
+      let lastAnimation = null;
+      /** @type {any} */
+      const el = {
+        style,
+        getBoundingClientRect: () => ({ ...currentRect }),
+        animate: () => {
+          lastAnimation = {
+            finished: new Promise((res) => {
+              lastResolve = res;
+            }),
+            cancel: cancelSpy,
+          };
+          return lastAnimation;
+        },
+        __setRect: (next) => {
+          currentRect = { ...currentRect, ...next };
+        },
+        __resolve: () => lastResolve?.(),
+        __getLastAnimation: () => lastAnimation,
+        __getCancelSpy: () => cancelSpy,
+      };
+      return el;
+    }
+
+    const a = createCancelableElement({ left: 0, top: 0, width: 10, height: 10 });
+    const ctrl = flip([/** @type {any} */ (a)]);
+    a.__setRect({ left: 10 });
+    const first = ctrl.play({ duration: 10 });
+    // Trigger a second play() immediately; default interrupt is 'cancel'
+    a.__setRect({ left: 20 });
+    const second = ctrl.play({ duration: 10 });
+
+    expect(second).not.toBe(first);
+    expect(a.__getCancelSpy()).toHaveBeenCalled();
+    a.__resolve();
+    await second.finished;
+  });
+
+  it('interrupt: queue schedules after current finishes', async () => {
+    /** @param {any} rect */
+    function createQueuedElement(rect) {
+      let currentRect = { ...rect };
+      const style = {};
+      const resolvers = [];
+      let callCount = 0;
+      /** @type {any} */
+      const el = {
+        style,
+        getBoundingClientRect: () => ({ ...currentRect }),
+        animate: () => {
+          callCount += 1;
+          const finished = new Promise((res) => {
+            resolvers.push(res);
+          });
+          return { finished, cancel: () => {} };
+        },
+        __setRect: (next) => {
+          currentRect = { ...currentRect, ...next };
+        },
+        __resolveNext: () => {
+          const r = resolvers.shift();
+          r && r();
+        },
+        __getAnimateCallCount: () => callCount,
+      };
+      return el;
+    }
+
+    const a = createQueuedElement({ left: 0, top: 0, width: 10, height: 10 });
+    const ctrl = flip([/** @type {any} */ (a)]);
+    a.__setRect({ left: 10 });
+    const first = ctrl.play({ duration: 10 });
+    a.__setRect({ left: 20 });
+    const second = ctrl.play({ duration: 10, interrupt: 'queue' });
+
+    // Only first run should have started so far
+    expect(a.__getAnimateCallCount()).toBe(1);
+    // Finish first
+    a.__resolveNext();
+    await first.finished;
+
+    // After first finishes, second should start
+    expect(a.__getAnimateCallCount()).toBe(2);
+    a.__resolveNext();
+    await second.finished;
   });
 });

@@ -27,7 +27,7 @@ export default function flip(elements) {
    * @property {number} [duration=100]
    * @property {EasingFunctions} [easing='ease']
    * @property {number} [delay=0]
-   * @property {number} [stagger=0]
+   * @property {number | ((index: number, count: number, element: HTMLElement) => number)} [stagger=0]
    * @property {FillMode} [fill='auto']
    * @property {PlaybackDirection} [direction='normal']
    * @property {CompositeOperation} [composite='add']
@@ -35,11 +35,34 @@ export default function flip(elements) {
    * @property {boolean} [respectReducedMotion=true]
    * @property {string} [transformOrigin='0 0']
    * @property {number} [epsilon=0.5]
+   * @property {'cancel'|'ignore'|'queue'} [interrupt='cancel']
+   * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onStart]
+   * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachStart]
+   * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachFinish]
+   * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onFinish]
    */
 
   /** @type {Animation[]} */
   let currentAnimations = [];
   let disconnected = false;
+  // Concurrency tracking
+  let activeRunId = 0;
+  /** @type {null | { runId: number; hasQueued?: boolean; queuedStarter?: () => { animations: Animation[]; finished: Promise<void>; cancel: () => void }; result: { animations: Animation[]; finished: Promise<void>; cancel: () => void } }} */
+  let inFlight = null;
+
+  /**
+   * Build a transform string from deltas.
+   * @param {number} dx
+   * @param {number} dy
+   * @param {number} scaleX
+   * @param {number} scaleY
+   * @param {boolean} shouldScale
+   */
+  function buildTransform(dx, dy, scaleX, scaleY, shouldScale) {
+    const parts = [`translate(${dx}px, ${dy}px)`];
+    if (shouldScale) parts.push(`scale(${scaleX}, ${scaleY})`);
+    return parts.join(' ');
+  }
 
   function measure() {
     elementBoxes.forEach((record) => {
@@ -68,9 +91,7 @@ export default function flip(elements) {
     currentAnimations.forEach((a) => {
       try {
         a.cancel();
-      } catch {
-        // Intentionally ignore cancellation errors
-      }
+      } catch { /* ignore */ }
     });
     currentAnimations = [];
   }
@@ -93,12 +114,29 @@ export default function flip(elements) {
       respectReducedMotion: true,
       transformOrigin: '0 0',
       epsilon: 0.5,
+      /** @type {'cancel'|'ignore'|'queue'} */
+      interrupt: 'cancel',
     };
 
     const opts = { ...defaultOptions, ...(options || {}) };
 
     if (disconnected) {
       return { animations: [], finished: Promise.resolve(), cancel };
+    }
+
+    // Handle concurrent play calls
+    if (inFlight) {
+      const mode = opts.interrupt || 'cancel';
+      if (mode === 'ignore') {
+        return inFlight.result;
+      }
+      if (mode === 'cancel') {
+        try {
+          inFlight.result.cancel();
+        } catch { /* ignore */ }
+        inFlight = null;
+      }
+      // 'queue' handled after we define startRun
     }
 
     const prefersReduced =
@@ -110,88 +148,190 @@ export default function flip(elements) {
     if (prefersReduced || (opts.duration || 0) <= 0) {
       // No-op animation: immediately refresh measurements so next play works correctly
       update();
-      return { animations: [], finished: Promise.resolve(), cancel };
+      try {
+        // Lifecycle hooks with no animations
+        opts.onStart?.({ options: opts, count: 0, animations: [] });
+      } catch { /* ignore */ }
+      const finished = Promise.resolve().then(() => {
+        try {
+          opts.onFinish?.({ options: opts, count: 0, animations: [] });
+        } catch { /* ignore */ }
+      });
+      return { animations: [], finished, cancel };
     }
 
-    // Read current boxes in a single pass
-    const now = elementBoxes.map((record) => ({
-      element: record.element,
-      prevBox: record.box,
-      nowBox: record.element.getBoundingClientRect(),
-    }));
+    // Internal runner with read/compute/write batching and lifecycle hooks
+    const startRun = () => {
+      const runId = ++activeRunId;
 
-    /** @type {Animation[]} */
-    const animations = [];
+      // Phase 1: reads
+      const entries = elementBoxes.map((record, index) => ({
+        element: record.element,
+        index,
+        prevBox: record.box,
+        nowBox: record.element.getBoundingClientRect(),
+      }));
 
-    now.forEach((entry, index) => {
-      const dx = entry.prevBox.left - entry.nowBox.left;
-      const dy = entry.prevBox.top - entry.nowBox.top;
+      // Phase 2: compute
+      const computed = entries.map((entry) => {
+        const dx = entry.prevBox.left - entry.nowBox.left;
+        const dy = entry.prevBox.top - entry.nowBox.top;
 
-      const prevW = entry.prevBox.width || 0;
-      const prevH = entry.prevBox.height || 0;
-      const nowW = entry.nowBox.width || 0;
-      const nowH = entry.nowBox.height || 0;
+        const prevW = entry.prevBox.width || 0;
+        const prevH = entry.prevBox.height || 0;
+        const nowW = entry.nowBox.width || 0;
+        const nowH = entry.nowBox.height || 0;
 
-      const scaleX = opts.shouldScale && nowW > 0 ? prevW / nowW : 1;
-      const scaleY = opts.shouldScale && nowH > 0 ? prevH / nowH : 1;
+        const scaleX = opts.shouldScale && nowW > 0 ? prevW / nowW : 1;
+        const scaleY = opts.shouldScale && nowH > 0 ? prevH / nowH : 1;
 
-      const isNegligible =
-        Math.abs(dx) < opts.epsilon &&
-        Math.abs(dy) < opts.epsilon &&
-        Math.abs(scaleX - 1) < 0.01 &&
-        Math.abs(scaleY - 1) < 0.01;
+        const isNegligible =
+          Math.abs(dx) < opts.epsilon &&
+          Math.abs(dy) < opts.epsilon &&
+          Math.abs(scaleX - 1) < 0.01 &&
+          Math.abs(scaleY - 1) < 0.01;
 
-      if (isNegligible) return;
-
-      /** @type {Keyframe[]} */
-      const keyframes = [
-        {
-          transformOrigin: opts.transformOrigin,
-          transform:
-            `translate(${dx}px, ${dy}px)` +
-            (opts.shouldScale ? ` scale(${scaleX}, ${scaleY})` : ''),
-        },
-        {
-          transformOrigin: opts.transformOrigin,
-          transform: 'none',
-        },
-      ];
-
-      try {
-        entry.element.style.willChange = 'transform';
-        const animation = entry.element.animate(keyframes, {
-          duration: opts.duration,
-          easing: opts.easing,
-          delay: (opts.delay || 0) + index * (opts.stagger || 0),
-          fill: opts.fill,
-          direction: opts.direction,
-          composite: opts.composite,
-        });
-        animations.push(animation);
-      } catch {
-        // If WAAPI is not available, skip animation rather than throwing
-      }
-    });
-
-    currentAnimations = animations;
-
-    const finished = Promise.all(animations.map((a) => a.finished))
-      .catch(() => {
-        // Ignore animation cancellation/rejection
-      })
-      .then(() => {
-        // Cleanup and refresh measurements to make subsequent plays correct
-        now.forEach((entry) => {
-          try {
-            entry.element.style.willChange = '';
-          } catch {
-            // Ignore cleanup errors
-          }
-        });
-        update();
+        return { entry, dx, dy, scaleX, scaleY, isNegligible };
       });
 
-    return { animations, finished, cancel };
+      /** @type {Animation[]} */
+      const animations = [];
+      /** Aligns with animations array; holds computed meta that produced each animation */
+      const animMeta = [];
+
+      try {
+        opts.onStart?.({ options: opts, count: computed.length, animations });
+      } catch { /* ignore */ }
+
+      // Phase 3: writes and start animations
+      const count = computed.length;
+      const baseDelay = opts.delay || 0;
+      /** @type {(i: number, c: number, el: HTMLElement) => number} */
+      const staggerResolver =
+        typeof opts.stagger === 'function'
+          ? (i, c, el) => baseDelay + /** @type {Exclude<FlipOptions['stagger'], number>} */ (opts.stagger)(i, c, el)
+          : (i) => baseDelay + i * (/** @type {number} */ (opts.stagger) || 0);
+
+      computed.forEach((c) => {
+        if (c.isNegligible) return;
+
+        /** @type {Keyframe[]} */
+        const keyframes = [
+          {
+            transformOrigin: opts.transformOrigin,
+            transform: buildTransform(c.dx, c.dy, c.scaleX, c.scaleY, !!opts.shouldScale),
+          },
+          {
+            transformOrigin: opts.transformOrigin,
+            transform: 'none',
+          },
+        ];
+
+        try {
+          c.entry.element.style.willChange = 'transform';
+          const delay = staggerResolver(c.entry.index, count, c.entry.element);
+          const animation = c.entry.element.animate(keyframes, {
+            duration: opts.duration,
+            easing: opts.easing,
+            delay,
+            fill: opts.fill,
+            direction: opts.direction,
+            composite: opts.composite,
+          });
+          animations.push(animation);
+          animMeta.push(c);
+          try {
+            opts.onEachStart?.(
+              {
+                element: c.entry.element,
+                index: c.entry.index,
+                prevBox: c.entry.prevBox,
+                nowBox: c.entry.nowBox,
+                delta: { dx: c.dx, dy: c.dy, scaleX: c.scaleX, scaleY: c.scaleY },
+              },
+              { options: opts, count, animations }
+            );
+          } catch { /* ignore */ }
+        } catch { /* ignore */ }
+      });
+
+      currentAnimations = animations;
+
+      // Per-animation finish hooks
+      animations.forEach((a, animationIndex) => {
+        a.finished
+          .catch(() => { return; })
+          .then(() => {
+            if (runId !== activeRunId) return;
+            const c = animMeta[animationIndex];
+            if (!c) return;
+            try {
+              opts.onEachFinish?.(
+                {
+                  element: c.entry.element,
+                  index: c.entry.index,
+                  prevBox: c.entry.prevBox,
+                  nowBox: c.entry.nowBox,
+                  delta: { dx: c.dx, dy: c.dy, scaleX: c.scaleX, scaleY: c.scaleY },
+                },
+                { options: opts, count: animMeta.length, animations }
+              );
+            } catch { /* ignore */ }
+          });
+      });
+
+      const finished = Promise.all(animations.map((a) => a.finished))
+        .catch(() => { return; })
+        .then(() => {
+          if (runId !== activeRunId) return;
+          // Cleanup and refresh measurements to make subsequent plays correct
+          entries.forEach((entry) => {
+            try {
+              entry.element.style.willChange = '';
+            } catch { /* ignore */ }
+          });
+          // If another run was queued, skip measurement refresh here so the queued
+          // run computes deltas relative to the last stable measurement
+          const queuedStarter = inFlight && inFlight.runId === runId ? inFlight.queuedStarter : undefined;
+          if (!(inFlight && inFlight.runId === runId && inFlight.hasQueued)) {
+            update();
+          }
+          try {
+            opts.onFinish?.({ options: opts, count: animMeta.length, animations });
+          } catch { /* ignore */ }
+          if (inFlight && inFlight.runId === runId) {
+            inFlight = null;
+          }
+          // Start queued run immediately (using queued options), if present
+          if (queuedStarter) {
+            queuedStarter();
+          }
+        });
+
+      const result = { animations, finished, cancel };
+      inFlight = { runId, result };
+      return result;
+    };
+
+    if (opts.interrupt === 'queue' && inFlight) {
+      // Chain after current run; ensure we don't start twice
+      inFlight.hasQueued = true;
+      /** @type {(value: { animations: Animation[]; finished: Promise<void>; cancel: () => void }) => void} */
+      let resolveStarted;
+      const startedPromise = new Promise((res) => { resolveStarted = res; });
+      inFlight.queuedStarter = () => {
+        const started = startRun();
+        resolveStarted(started);
+        return started;
+      };
+      const finished = inFlight.result.finished
+        .catch(() => { return; })
+        .then(() => startedPromise)
+        .then((started) => started.finished);
+      return { animations: [], finished, cancel };
+    }
+
+    return startRun();
   }
 
   function disconnect() {
