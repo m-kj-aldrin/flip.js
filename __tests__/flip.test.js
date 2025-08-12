@@ -11,6 +11,7 @@ function createElementWithRect(rect) {
   const el = {
     style,
     getBoundingClientRect: () => ({ ...currentRect }),
+    getAttribute: () => undefined,
     animate: (keyframes, options) => {
       calls.push({ keyframes, options });
       return {

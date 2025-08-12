@@ -28,7 +28,7 @@ export default function flip(elements) {
    * @property {EasingFunctions} [easing='ease']
    * @property {number} [delay=0]
    * @property {number | ((index: number, count: number, element: HTMLElement) => number)} [stagger=0]
-   * @property {FillMode} [fill='auto']
+   * @property {FillMode} [fill='both']
    * @property {PlaybackDirection} [direction='normal']
    * @property {CompositeOperation} [composite='add']
    * @property {boolean} [shouldScale=true]
@@ -62,6 +62,16 @@ export default function flip(elements) {
     const parts = [`translate(${dx}px, ${dy}px)`];
     if (shouldScale) parts.push(`scale(${scaleX}, ${scaleY})`);
     return parts.join(' ');
+  }
+
+  /**
+   * Parse a numeric data attribute value; returns null if not finite
+   * @param {string | null} value
+   */
+  function parseNumeric(value) {
+    if (value == null) return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
   }
 
   function measure() {
@@ -107,7 +117,7 @@ export default function flip(elements) {
       easing: 'ease',
       delay: 0,
       stagger: 0,
-      fill: 'auto',
+      fill: 'both',
       direction: 'normal',
       composite: 'add',
       shouldScale: true,
@@ -230,10 +240,29 @@ export default function flip(elements) {
         try {
           c.entry.element.style.willChange = 'transform';
           const delay = staggerResolver(c.entry.index, count, c.entry.element);
-          const animation = c.entry.element.animate(keyframes, {
-            duration: opts.duration,
+          // Per-element overrides via data attributes
+          // data-flip-duration: absolute duration in ms for this element
+          // data-flip-duration-offset: added to options.duration; ignored if data-flip-duration is present
+          // data-flip-delay: absolute delay in ms for this element (overrides base delay + stagger)
+          const el = c.entry.element;
+          const attrDuration = parseNumeric(el.getAttribute?.('data-flip-duration') ?? null);
+          const attrDurationOffset = parseNumeric(el.getAttribute?.('data-flip-duration-offset') ?? null);
+          const attrDelay = parseNumeric(el.getAttribute?.('data-flip-delay') ?? null);
+
+          let effectiveDuration = opts.duration;
+          if (attrDurationOffset != null) {
+            effectiveDuration = Math.max(0, (opts.duration || 0) + attrDurationOffset);
+          }
+          if (attrDuration != null) {
+            effectiveDuration = Math.max(0, attrDuration);
+          }
+
+          const effectiveDelay = attrDelay != null ? Math.max(0, attrDelay) : delay;
+
+          const animation = el.animate(keyframes, {
+            duration: effectiveDuration,
             easing: opts.easing,
-            delay,
+            delay: effectiveDelay,
             fill: opts.fill,
             direction: opts.direction,
             composite: opts.composite,
