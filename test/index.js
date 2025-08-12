@@ -10,6 +10,36 @@ let items = [
   {
     name: 'Bird Nerd',
   },
+  {
+    name: 'Fish Dish',
+  },
+  {
+    name: 'Rat Chat',
+  },
+  {
+    name: 'Pig Jig',
+  },
+  {
+    name: 'Fox Box',
+  },
+  {
+    name: 'Bear Lair',
+  },
+  {
+    name: 'Goat Note',
+  },
+  {
+    name: 'Duck Luck',
+  },
+  {
+    name: 'Sheep Sleep',
+  },
+  {
+    name: 'Cow Pow',
+  },
+  {
+    name: 'Mouse House',
+  },
 ];
 
 function render_item(item) {
@@ -24,13 +54,20 @@ document.body.appendChild(list_element);
 
 let item_elements = items.map(render_item);
 
+/**
+ * @param {HTMLElement} item
+ * @param {number} index
+ */
+function set_item_attributes(item, index) {
+  item.setAttribute('data-flip-delay', `${(item_elements.length - 1 - index) * 10}`);
+  item.setAttribute('data-flip-duration-offset', `${index * 5}`);
+  item.setAttribute('data-index', index.toString());
+}
+
 // Demonstrate per-element timing overrides via data attributes
-// 1st item: delay override 300ms
-if (item_elements[0]) item_elements[0].setAttribute('data-flip-delay', '0');
-// 2nd item: duration offset +200ms relative to play() options
-if (item_elements[1]) item_elements[1].setAttribute('data-flip-delay', '100');
-// 3rd item: absolute duration 1200ms
-if (item_elements[2]) item_elements[2].setAttribute('data-flip-delay', '200');
+item_elements.forEach((item, index) => {
+  set_item_attributes(item, index);
+});
 
 list_element.append(...item_elements);
 
@@ -52,13 +89,17 @@ function move_last_to_first() {
   list_element.insertBefore(last, first);
 
   return controller.play({
-    duration: 1000,
-    easing: 'cubic-bezier(0.1, 0.2, 0.11, 1)',
+    duration: 300,
+    easing: 'cubic-bezier(0.05, -0.25, 0.1, 1.1)',
   });
 }
 
 if (move_button instanceof HTMLButtonElement) {
   move_button.addEventListener('click', () => {
     move_last_to_first();
+    item_elements.forEach((item) => {
+      const index = (Number(item.getAttribute('data-index')) + 1) % item_elements.length;
+      set_item_attributes(item, index);
+    });
   });
 }
