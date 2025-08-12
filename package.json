@@ -39,5 +39,13 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m-kj-aldrin/flip.js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/m-kj-aldrin/flip.js/issues"
+  },
+  "homepage": "https://github.com/m-kj-aldrin/flip.js#readme"
 }
