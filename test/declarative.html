@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>flip declarative</title>
+    <script type="module" src="/declarative.js"></script>
+    <style>
+      body { font-family: monospace; }
+      .controls { margin-bottom: 8px; }
+      ul { list-style: none; padding: 0; margin: 0 16px 0 0; display: inline-block; vertical-align: top; }
+      li { margin: 2px 0; padding: 2px; border: 1px solid currentColor; border-radius: 2px; }
+      .row { display: flex; }
+      button { margin-right: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <button id="swap">Swap random between lists</button>
+      <button id="shuffle">Shuffle A</button>
+      <label>Stagger:
+        <select id="stg">
+          <option value="proximity" selected>proximity</option>
+          <option value="index">index</option>
+          <option value="120">120ms fixed</option>
+        </select>
+      </label>
+    </div>
+
+    <flip-group id="group" selector="li" stagger="proximity" stagger-step="60" duration="500" easing="cubic-bezier(0.05, -0.25, 0.1, 1.1)" respect-reduced-motion="false">
+      <div class="row">
+        <ul id="a">
+          <li data-flip>Cat</li>
+          <li data-flip>Dog</li>
+          <li data-flip>Bird</li>
+          <li data-flip>Fish</li>
+          <li data-flip>Pig</li>
+        </ul>
+        <ul id="b">
+          <li data-flip>Alpha</li>
+          <li data-flip>Beta</li>
+          <li data-flip>Gamma</li>
+          <li data-flip>Delta</li>
+        </ul>
+      </div>
+    </flip-group>
+  </body>
+  </html>
+
+
