@@ -17,11 +17,12 @@
  * @param {T} elements
  */
 export default function flip(elements) {
+  const indexMap = buildDomIndexMap(Array.from(elements));
   const elementBoxes = Array.from(elements).map((element, i) => ({
     element,
     box: element.getBoundingClientRect(),
     /** DOM index relative to siblings at time of flip() call (fallback to provided order) */
-    index: computeDomIndex(element, i),
+    index: indexMap.get(element) ?? i,
   }));
 
   /**
@@ -78,21 +79,28 @@ export default function flip(elements) {
   }
 
   /**
-   * Compute DOM index relative to its parentElement children; fallback to provided index if unavailable.
-   * @param {HTMLElement} element
-   * @param {number} fallback
+   * Build a map of DOM indices for elements that share a common parentElement.
+   * If no common parent exists, returns an empty map.
+   * @param {HTMLElement[]} els
+   * @returns {Map<Element, number>}
    */
-  function computeDomIndex(element, fallback) {
+  function buildDomIndexMap(els) {
     try {
-      const parent = /** @type {HTMLElement | null} */ (element.parentElement || null);
-      if (!parent) return fallback;
+      const firstWithParent = els.find((el) => !!el && !!el.parentElement) || null;
+      const parent = firstWithParent ? firstWithParent.parentElement : null;
+      if (!parent) return new Map();
+      // Ensure common parent
+      for (let i = 0; i < els.length; i += 1) {
+        if (els[i].parentElement !== parent) return new Map();
+      }
+      const map = new Map();
       const children = parent.children;
       for (let i = 0; i < children.length; i += 1) {
-        if (children[i] === element) return i;
+        map.set(children[i], i);
       }
-      return fallback;
+      return map;
     } catch {
-      return fallback;
+      return new Map();
     }
   }
 
@@ -110,9 +118,10 @@ export default function flip(elements) {
   function update(newElements) {
     if (newElements) {
       const next = Array.from(newElements);
+      const idxMap = buildDomIndexMap(next);
       elementBoxes.length = 0;
       next.forEach((element, i) => {
-        elementBoxes.push({ element, box: element.getBoundingClientRect(), index: computeDomIndex(element, i) });
+        elementBoxes.push({ element, box: element.getBoundingClientRect(), index: idxMap.get(element) ?? i });
       });
     } else {
       measure();
@@ -243,7 +252,7 @@ export default function flip(elements) {
       const staggerResolver =
         typeof opts.stagger === 'function'
           ? (i, c, el) => baseDelay + /** @type {Exclude<FlipOptions['stagger'], number>} */ (opts.stagger)(i, c, el)
-          : (i) => baseDelay + i * (/** @type {number} */ (opts.stagger) || 0);
+          : (i) => baseDelay + i * ((/** @type {number} */ (opts.stagger)) || 0);
 
       computed.forEach((c) => {
         if (c.isNegligible) return;
@@ -307,11 +316,15 @@ export default function flip(elements) {
         } catch { /* ignore */ }
       });
 
-      // After starting animations, optionally recalculate and store new DOM indices
+      // After starting animations, optionally recalculate and store new DOM indices using a single-pass map
       if (opts.recalculateIndices) {
-        elementBoxes.forEach((record) => {
-          record.index = computeDomIndex(record.element, record.index);
-        });
+        const idxMap = buildDomIndexMap(elementBoxes.map((r) => r.element));
+        if (idxMap.size > 0) {
+          elementBoxes.forEach((record) => {
+            const nextIndex = idxMap.get(record.element);
+            if (typeof nextIndex === 'number') record.index = nextIndex;
+          });
+        }
       }
 
       currentAnimations = animations;
