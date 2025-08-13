@@ -110,14 +110,20 @@ function swap_between_lists() {
   if (fromA) controller.markPrimary(fromA);
   if (fromB) controller.markPrimary(fromB);
 
-  // Compute random insert positions and move
-  if (fromA) {
-    const insertIdxB = Math.floor(Math.random() * (list_b.children.length + 1));
+  // Capture source indices before DOM changes
+  const fromIdxA = fromA ? Array.from(list_a.children).indexOf(fromA) : null;
+  const fromIdxB = fromB ? Array.from(list_b.children).indexOf(fromB) : null;
+
+  // Compute random insert positions ahead of time
+  const insertIdxB = fromA ? Math.floor(Math.random() * (list_b.children.length + 1)) : null;
+  const insertIdxA = fromB ? Math.floor(Math.random() * (list_a.children.length + 1)) : null;
+
+  // Perform DOM moves using the chosen positions
+  if (fromA && insertIdxB != null) {
     const refB = list_b.children[insertIdxB] || null;
     list_b.insertBefore(fromA, refB);
   }
-  if (fromB) {
-    const insertIdxA = Math.floor(Math.random() * (list_a.children.length + 1));
+  if (fromB && insertIdxA != null) {
     const refA = list_a.children[insertIdxA] || null;
     list_a.insertBefore(fromB, refA);
   }
@@ -126,7 +132,28 @@ function swap_between_lists() {
     duration: 1000,
     respectReducedMotion: false,
     easing: 'cubic-bezier(0.05, -0.25, 0.1, 1.1)',
-    stagger: (ctx) => (ctx.isPrimary ? 0 : ctx.from.index * 20),
+    stagger: (ctx) => {
+      if (ctx.isPrimary) return 0;
+      /** @type {number[]} */
+      const distances = [];
+      // Distance from the removal point in list A/B
+      if (fromIdxA != null && ctx.from.parent === list_a) {
+        distances.push(Math.abs(ctx.from.index - fromIdxA));
+      }
+      if (fromIdxB != null && ctx.from.parent === list_b) {
+        distances.push(Math.abs(ctx.from.index - fromIdxB));
+      }
+      // Distance from the insertion point in list A/B
+      if (insertIdxA != null && ctx.to.parent === list_a) {
+        distances.push(Math.abs(ctx.to.index - insertIdxA));
+      }
+      if (insertIdxB != null && ctx.to.parent === list_b) {
+        distances.push(Math.abs(ctx.to.index - insertIdxB));
+      }
+      const step = 60;
+      const dist = distances.length ? Math.min(...distances) : 0;
+      return dist * step;
+    },
     onStart: ({ animations }) => {
       // no-op; keep to show hooks available
     },
