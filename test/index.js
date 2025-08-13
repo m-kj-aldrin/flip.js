@@ -59,9 +59,9 @@ let item_elements = items.map(render_item);
  * @param {number} index
  */
 function set_item_attributes(item, index) {
-  item.setAttribute('data-flip-delay', `${(item_elements.length - 1 - index) * 10}`);
-  item.setAttribute('data-flip-duration-offset', `${index * 5}`);
-  item.setAttribute('data-index', index.toString());
+  // item.setAttribute('data-flip-delay', `${(item_elements.length - 1 - index) * 10}`);
+  // item.setAttribute('data-flip-duration-offset', `${index * 5}`);
+  // item.setAttribute('data-index', index.toString());
 }
 
 // Demonstrate per-element timing overrides via data attributes
@@ -86,11 +86,22 @@ function move_last_to_first() {
 
   const first = children[0];
   const last = children[children.length - 1];
+
+  controller.markPrimary(last);
   list_element.insertBefore(last, first);
 
   return controller.play({
-    duration: 300,
+    duration: 1000,
     easing: 'cubic-bezier(0.05, -0.25, 0.1, 1.1)',
+    // Ensure demo animates even if OS has reduced motion enabled (common on Windows)
+    respectReducedMotion: false,
+    stagger: (ctx) => {
+      let delay = (item_elements.length - ctx.from.index) * 20;
+      if (ctx.isPrimary) {
+        delay = 0;
+      }
+      return delay;
+    },
   });
 }
 

@@ -36,7 +36,7 @@ export default function flip(elements) {
    * @property {number} [duration=100]
    * @property {EasingFunctions} [easing='ease']
    * @property {number} [delay=0]
-   * @property {number | ((index: number, count: number, element: HTMLElement) => number) | ((ctx: { element: HTMLElement; from: { parent: HTMLElement | null; index: number; rect: DOMRectReadOnly }; to: { parent: HTMLElement | null; index: number; rect: DOMRectReadOnly } }) => number)} [stagger=0]
+   * @property {number | ((ctx: FlipStaggerContext) => number)} [stagger=0]
    * @property {FillMode} [fill='both']
    * @property {PlaybackDirection} [direction='normal']
    * @property {CompositeOperation} [composite='add']
@@ -52,6 +52,16 @@ export default function flip(elements) {
    * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onFinish]
    */
 
+  /**
+   * Context provided to the `stagger` callback when using the functional form.
+   * Consumers can use `isPrimary` to detect elements explicitly marked via controller.markPrimary().
+   * @typedef {Object} FlipStaggerContext
+   * @property {HTMLElement} element
+   * @property {{ parent: HTMLElement | null; index: number; rect: DOMRectReadOnly }} from
+   * @property {{ parent: HTMLElement | null; index: number; rect: DOMRectReadOnly }} to
+   * @property {boolean} isPrimary
+   */
+
   /** @type {Animation[]} */
   let currentAnimations = [];
   let disconnected = false;
@@ -59,6 +69,12 @@ export default function flip(elements) {
   let activeRunId = 0;
   /** @type {null | { runId: number; hasQueued?: boolean; queuedStarter?: () => { animations: Animation[]; finished: Promise<void>; cancel: () => void }; result: { animations: Animation[]; finished: Promise<void>; cancel: () => void } }} */
   let inFlight = null;
+  /**
+   * Elements explicitly marked as primary (programmatically moved) for the next run.
+   * Cleared when a run starts; snapshot is used within that run only.
+   * @type {Set<HTMLElement>}
+   */
+  let primaryMarks = new Set();
 
   /**
    * Build a transform string from deltas.
@@ -143,9 +159,31 @@ export default function flip(elements) {
     currentAnimations.forEach((a) => {
       try {
         a.cancel();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     });
     currentAnimations = [];
+  }
+
+  /**
+   * Mark one or more elements as primary for the next animation run.
+   * Primary elements can be detected in the stagger callback via ctx.isPrimary.
+   * @param {HTMLElement | HTMLElement[]} elementsToMark
+   */
+  function markPrimary(elementsToMark) {
+    if (!elementsToMark) return;
+    const arr = Array.isArray(elementsToMark) ? elementsToMark : [elementsToMark];
+    for (let i = 0; i < arr.length; i += 1) {
+      const el = arr[i];
+      if (el && typeof el === 'object') {
+        try {
+          primaryMarks.add(el);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
   }
 
   /**
@@ -186,7 +224,9 @@ export default function flip(elements) {
       if (mode === 'cancel') {
         try {
           inFlight.result.cancel();
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         inFlight = null;
       }
       // 'queue' handled after we define startRun
@@ -204,11 +244,15 @@ export default function flip(elements) {
       try {
         // Lifecycle hooks with no animations
         opts.onStart?.({ options: opts, count: 0, animations: [] });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       const finished = Promise.resolve().then(() => {
         try {
           opts.onFinish?.({ options: opts, count: 0, animations: [] });
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       });
       return { animations: [], finished, cancel };
     }
@@ -216,6 +260,10 @@ export default function flip(elements) {
     // Internal runner with read/compute/write batching and lifecycle hooks
     const startRun = () => {
       const runId = ++activeRunId;
+
+      // Snapshot and clear primary marks for this run only
+      const runPrimary = primaryMarks;
+      primaryMarks = new Set();
 
       // Phase 1: reads
       const entries = elementBoxes.map((record) => ({
@@ -258,7 +306,9 @@ export default function flip(elements) {
 
       try {
         opts.onStart?.({ options: opts, count: computed.length, animations });
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       // Phase 3: writes and start animations
       const count = computed.length;
@@ -270,28 +320,26 @@ export default function flip(elements) {
         const fromParent = c.entry.parent || el.parentElement || null;
         const fromIndex = c.entry.index;
         const toParent = el.parentElement || null;
-        const toIndex = toParent ? (toIdxMapByParent.get(toParent)?.get(el) ?? fromIndex) : fromIndex;
+        const toIndex = toParent
+          ? (toIdxMapByParent.get(toParent)?.get(el) ?? fromIndex)
+          : fromIndex;
 
         /** @type {number} */
         let resolved = 0;
         if (typeof opts.stagger === 'number') {
-          resolved = (/** @type {number} */ (opts.stagger) || 0) * fromIndex;
+          resolved = /** @type {number} */ ((opts.stagger) || 0) * fromIndex;
         } else if (typeof opts.stagger === 'function') {
           const fn = /** @type {Function} */ (opts.stagger);
-          if (fn.length <= 1) {
-            // New API: single context argument
-            const ctx = {
-              element: el,
-              from: { parent: fromParent, index: fromIndex, rect: c.entry.prevBox },
-              to: { parent: toParent, index: toIndex, rect: c.entry.nowBox },
-            };
-            const v = Number(fn(ctx));
-            resolved = Number.isFinite(v) ? v : 0;
-          } else {
-            // Legacy API: (index, count, element)
-            const v = Number(fn(fromIndex, count, el));
-            resolved = Number.isFinite(v) ? v : 0;
-          }
+          // Functional API: single context argument
+          /** @type {FlipStaggerContext} */
+          const ctx = {
+            element: el,
+            from: { parent: fromParent, index: fromIndex, rect: c.entry.prevBox },
+            to: { parent: toParent, index: toIndex, rect: c.entry.nowBox },
+            isPrimary: runPrimary.has(el),
+          };
+          const v = Number(fn(ctx));
+          resolved = Number.isFinite(v) ? v : 0;
         }
         return baseDelay + resolved;
       }
@@ -320,7 +368,9 @@ export default function flip(elements) {
           // data-flip-delay: absolute delay in ms for this element (overrides base delay + stagger)
           const el = c.entry.element;
           const attrDuration = parseNumeric(el.getAttribute?.('data-flip-duration') ?? null);
-          const attrDurationOffset = parseNumeric(el.getAttribute?.('data-flip-duration-offset') ?? null);
+          const attrDurationOffset = parseNumeric(
+            el.getAttribute?.('data-flip-duration-offset') ?? null,
+          );
           const attrDelay = parseNumeric(el.getAttribute?.('data-flip-delay') ?? null);
 
           let effectiveDuration = opts.duration;
@@ -352,10 +402,14 @@ export default function flip(elements) {
                 nowBox: c.entry.nowBox,
                 delta: { dx: c.dx, dy: c.dy, scaleX: c.scaleX, scaleY: c.scaleY },
               },
-              { options: opts, count, animations }
+              { options: opts, count, animations },
             );
-          } catch { /* ignore */ }
-        } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
+        } catch {
+          /* ignore */
+        }
       });
 
       // After starting animations, optionally recalculate and store new DOM indices using the multi-parent map
@@ -374,7 +428,9 @@ export default function flip(elements) {
       // Per-animation finish hooks
       animations.forEach((a, animationIndex) => {
         a.finished
-          .catch(() => { return; })
+          .catch(() => {
+            return;
+          })
           .then(() => {
             if (runId !== activeRunId) return;
             const c = animMeta[animationIndex];
@@ -388,31 +444,40 @@ export default function flip(elements) {
                   nowBox: c.entry.nowBox,
                   delta: { dx: c.dx, dy: c.dy, scaleX: c.scaleX, scaleY: c.scaleY },
                 },
-                { options: opts, count: animMeta.length, animations }
+                { options: opts, count: animMeta.length, animations },
               );
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           });
       });
 
       const finished = Promise.all(animations.map((a) => a.finished))
-        .catch(() => { return; })
+        .catch(() => {
+          return;
+        })
         .then(() => {
           if (runId !== activeRunId) return;
           // Cleanup and refresh measurements to make subsequent plays correct
           entries.forEach((entry) => {
             try {
               entry.element.style.willChange = '';
-            } catch { /* ignore */ }
+            } catch {
+              /* ignore */
+            }
           });
           // If another run was queued, skip measurement refresh here so the queued
           // run computes deltas relative to the last stable measurement
-          const queuedStarter = inFlight && inFlight.runId === runId ? inFlight.queuedStarter : undefined;
+          const queuedStarter =
+            inFlight && inFlight.runId === runId ? inFlight.queuedStarter : undefined;
           if (!(inFlight && inFlight.runId === runId && inFlight.hasQueued)) {
             update();
           }
           try {
             opts.onFinish?.({ options: opts, count: animMeta.length, animations });
-          } catch { /* ignore */ }
+          } catch {
+            /* ignore */
+          }
           if (inFlight && inFlight.runId === runId) {
             inFlight = null;
           }
@@ -432,14 +497,18 @@ export default function flip(elements) {
       inFlight.hasQueued = true;
       /** @type {(value: { animations: Animation[]; finished: Promise<void>; cancel: () => void }) => void} */
       let resolveStarted;
-      const startedPromise = new Promise((res) => { resolveStarted = res; });
+      const startedPromise = new Promise((res) => {
+        resolveStarted = res;
+      });
       inFlight.queuedStarter = () => {
         const started = startRun();
         resolveStarted(started);
         return started;
       };
       const finished = inFlight.result.finished
-        .catch(() => { return; })
+        .catch(() => {
+          return;
+        })
         .then(() => startedPromise)
         .then((started) => started.finished);
       return { animations: [], finished, cancel };
@@ -459,6 +528,7 @@ export default function flip(elements) {
     measure,
     update,
     cancel,
+    markPrimary,
     disconnect,
   };
 }

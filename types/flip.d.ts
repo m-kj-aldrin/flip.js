@@ -20,7 +20,7 @@ export default function flip<T extends HTMLElement[] | NodeListOf<HTMLElement> |
         duration?: number;
         easing?: EasingFunctions;
         delay?: number;
-        stagger?: number | ((index: number, count: number, element: HTMLElement) => number) | ((ctx: {
+        stagger?: number | ((ctx: {
             element: HTMLElement;
             from: {
                 parent: HTMLElement | null;
@@ -92,6 +92,7 @@ export default function flip<T extends HTMLElement[] | NodeListOf<HTMLElement> |
     measure: () => DOMRect[];
     update: <U extends HTMLElement[] | NodeListOf<HTMLElement> | HTMLCollectionOf<HTMLElement>>(newElements?: U) => void;
     cancel: () => void;
+    markPrimary: (elementsToMark: HTMLElement | HTMLElement[]) => void;
     disconnect: () => void;
 };
 /**
