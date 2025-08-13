@@ -7,10 +7,10 @@
   "main": "src/flip.js",
   "module": "src/flip.js",
   "exports": "./src/flip.js",
-  "types": "dist/flip.d.ts",
+  "types": "types/index.d.ts",
   "files": [
     "src",
-    "dist",
+    "types",
     "README.md"
   ],
   "sideEffects": false,
