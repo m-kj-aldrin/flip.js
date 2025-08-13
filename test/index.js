@@ -1,6 +1,6 @@
 import flip from '../src/flip.js';
 
-let items = [
+let itemsA = [
   {
     name: 'Cat Math',
   },
@@ -42,6 +42,14 @@ let items = [
   },
 ];
 
+let itemsB = [
+  { name: 'Alpha' },
+  { name: 'Beta' },
+  { name: 'Gamma' },
+  { name: 'Delta' },
+  { name: 'Epsilon' },
+];
+
 function render_item(item) {
   let item_element = document.createElement('li');
   item_element.textContent = `name: ${item.name}`;
@@ -49,10 +57,15 @@ function render_item(item) {
   return item_element;
 }
 
-let list_element = document.createElement('ul');
-document.body.appendChild(list_element);
+const list_a = document.getElementById('list-a');
+const list_b = document.getElementById('list-b');
 
-let item_elements = items.map(render_item);
+if (!(list_a instanceof HTMLUListElement) || !(list_b instanceof HTMLUListElement)) {
+  throw new Error('expected #list-a and #list-b');
+}
+
+let item_elements_a = itemsA.map(render_item);
+let item_elements_b = itemsB.map(render_item);
 
 /**
  * @param {HTMLElement} item
@@ -65,52 +78,63 @@ function set_item_attributes(item, index) {
 }
 
 // Demonstrate per-element timing overrides via data attributes
-item_elements.forEach((item, index) => {
-  set_item_attributes(item, index);
-});
+item_elements_a.forEach((item, index) => set_item_attributes(item, index));
+item_elements_b.forEach((item, index) => set_item_attributes(item, index));
 
-list_element.append(...item_elements);
+list_a.append(...item_elements_a);
+list_b.append(...item_elements_b);
 
-const move_button = document.getElementById('move-last-first');
+const move_button = document.getElementById('swap-between');
 
-/**
- * Moves the last <li> to the first position and animates with flip.
- */
-function move_last_to_first() {
+function pickRandomChild(parent) {
+  const children = parent.children;
+  if (children.length === 0) return null;
+  const idx = Math.floor(Math.random() * children.length);
+  return /** @type {HTMLElement} */ (children[idx]);
+}
+
+function swap_between_lists() {
   /** @type {HTMLElement[]} */
-  // Cast to HTMLElement[] for accurate typing in flip()
-  const children = /** @type {HTMLElement[]} */ (Array.from(list_element.children));
-  if (children.length < 2) return;
+  const allChildren = /** @type {HTMLElement[]} */ ([
+    ...Array.from(list_a.children),
+    ...Array.from(list_b.children),
+  ]);
+  if (allChildren.length === 0) return;
 
-  const controller = flip(children);
+  const controller = flip(allChildren);
 
-  const first = children[0];
-  const last = children[children.length - 1];
+  const fromA = pickRandomChild(list_a);
+  const fromB = pickRandomChild(list_b);
+  if (!fromA && !fromB) return;
 
-  controller.markPrimary(last);
-  list_element.insertBefore(last, first);
+  if (fromA) controller.markPrimary(fromA);
+  if (fromB) controller.markPrimary(fromB);
+
+  // Compute random insert positions and move
+  if (fromA) {
+    const insertIdxB = Math.floor(Math.random() * (list_b.children.length + 1));
+    const refB = list_b.children[insertIdxB] || null;
+    list_b.insertBefore(fromA, refB);
+  }
+  if (fromB) {
+    const insertIdxA = Math.floor(Math.random() * (list_a.children.length + 1));
+    const refA = list_a.children[insertIdxA] || null;
+    list_a.insertBefore(fromB, refA);
+  }
 
   return controller.play({
     duration: 1000,
-    easing: 'cubic-bezier(0.05, -0.25, 0.1, 1.1)',
-    // Ensure demo animates even if OS has reduced motion enabled (common on Windows)
     respectReducedMotion: false,
-    stagger: (ctx) => {
-      let delay = (item_elements.length - ctx.from.index) * 20;
-      if (ctx.isPrimary) {
-        delay = 0;
-      }
-      return delay;
+    easing: 'cubic-bezier(0.05, -0.25, 0.1, 1.1)',
+    stagger: (ctx) => (ctx.isPrimary ? 0 : ctx.from.index * 20),
+    onStart: ({ animations }) => {
+      // no-op; keep to show hooks available
     },
   });
 }
 
 if (move_button instanceof HTMLButtonElement) {
   move_button.addEventListener('click', () => {
-    move_last_to_first();
-    item_elements.forEach((item) => {
-      const index = (Number(item.getAttribute('data-index')) + 1) % item_elements.length;
-      set_item_attributes(item, index);
-    });
+    swap_between_lists();
   });
 }
