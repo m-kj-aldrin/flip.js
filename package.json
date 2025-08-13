@@ -1,51 +1,20 @@
 {
-  "name": "@mkja/flip-motion",
-  "version": "0.1.0",
-  "description": "Tiny FLIP animation utility (translate + optional scale) with Promise-based play and reduced-motion support.",
+  "name": "@mkja/flip-monorepo",
+  "private": true,
   "type": "module",
-  "license": "MIT",
-  "main": "src/flip.js",
-  "module": "src/flip.js",
-  "exports": "./src/flip.js",
-  "types": "types/index.d.ts",
-  "files": [
-    "src",
-    "types",
-    "README.md"
+  "workspaces": [
+    "packages/*"
   ],
-  "sideEffects": false,
-  "scripts": {
-    "dev": "vite test",
-    "test": "vitest --run",
-    "test:watch": "vitest",
-    "lint": "eslint .",
-    "format": "prettier -w .",
-    "build:types": "tsc -p tsconfig.types.json",
-    "build": "npm run build:types",
-    "prepare": "npm run build"
-  },
   "devDependencies": {
-    "@eslint/js": "^9.9.1",
-    "eslint": "^9.6.0",
-    "globals": "^15.11.0",
-    "jsdom": "^24.1.0",
-    "prettier": "^3.3.3",
-    "typescript": "^5.9.2",
-    "vite": "^5.4.2",
-    "vitest": "^2.0.5"
+    "typescript": "^5.9.2"
+  },
+  "scripts": {
+    "build": "npm run build -w @mkja/flip && npm run build -w @mkja/flip-group",
+    "test": "npm -w @mkja/flip test && npm -w @mkja/flip-group test",
+    "publish:flip": "npm publish --access public -w @mkja/flip",
+    "publish:group": "npm publish --access public -w @mkja/flip-group"
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/m-kj-aldrin/flip.js.git"
-  },
-  "bugs": {
-    "url": "https://github.com/m-kj-aldrin/flip.js/issues"
-  },
-  "homepage": "https://github.com/m-kj-aldrin/flip.js#readme"
+  }
 }

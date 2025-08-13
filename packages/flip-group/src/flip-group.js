@@ -1,4 +1,4 @@
-import flip from './flip.js';
+import { flip } from '@mkja/flip';
 
 /**
  * Declarative FLIP custom element.
