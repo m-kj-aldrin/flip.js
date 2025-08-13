@@ -29,6 +29,7 @@ export default function flip<T extends HTMLElement[] | NodeListOf<HTMLElement> |
         transformOrigin?: string;
         epsilon?: number;
         interrupt?: "cancel" | "ignore" | "queue";
+        recalculateIndices?: boolean;
         onStart?: (ctx: {
             options: /*elided*/ any;
             count: number;

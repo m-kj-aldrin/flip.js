@@ -17,9 +17,11 @@
  * @param {T} elements
  */
 export default function flip(elements) {
-  const elementBoxes = Array.from(elements).map((element) => ({
+  const elementBoxes = Array.from(elements).map((element, i) => ({
     element,
     box: element.getBoundingClientRect(),
+    /** DOM index relative to siblings at time of flip() call (fallback to provided order) */
+    index: computeDomIndex(element, i),
   }));
 
   /**
@@ -36,6 +38,7 @@ export default function flip(elements) {
    * @property {string} [transformOrigin='0 0']
    * @property {number} [epsilon=0.5]
    * @property {'cancel'|'ignore'|'queue'} [interrupt='cancel']
+   * @property {boolean} [recalculateIndices=false]
    * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onStart]
    * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachStart]
    * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachFinish]
@@ -74,6 +77,25 @@ export default function flip(elements) {
     return Number.isFinite(n) ? n : null;
   }
 
+  /**
+   * Compute DOM index relative to its parentElement children; fallback to provided index if unavailable.
+   * @param {HTMLElement} element
+   * @param {number} fallback
+   */
+  function computeDomIndex(element, fallback) {
+    try {
+      const parent = /** @type {HTMLElement | null} */ (element.parentElement || null);
+      if (!parent) return fallback;
+      const children = parent.children;
+      for (let i = 0; i < children.length; i += 1) {
+        if (children[i] === element) return i;
+      }
+      return fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
   function measure() {
     elementBoxes.forEach((record) => {
       record.box = record.element.getBoundingClientRect();
@@ -89,8 +111,8 @@ export default function flip(elements) {
     if (newElements) {
       const next = Array.from(newElements);
       elementBoxes.length = 0;
-      next.forEach((element) => {
-        elementBoxes.push({ element, box: element.getBoundingClientRect() });
+      next.forEach((element, i) => {
+        elementBoxes.push({ element, box: element.getBoundingClientRect(), index: computeDomIndex(element, i) });
       });
     } else {
       measure();
@@ -126,6 +148,7 @@ export default function flip(elements) {
       epsilon: 0.5,
       /** @type {'cancel'|'ignore'|'queue'} */
       interrupt: 'cancel',
+      recalculateIndices: false,
     };
 
     const opts = { ...defaultOptions, ...(options || {}) };
@@ -175,9 +198,9 @@ export default function flip(elements) {
       const runId = ++activeRunId;
 
       // Phase 1: reads
-      const entries = elementBoxes.map((record, index) => ({
+      const entries = elementBoxes.map((record) => ({
         element: record.element,
-        index,
+        index: record.index,
         prevBox: record.box,
         nowBox: record.element.getBoundingClientRect(),
       }));
@@ -283,6 +306,13 @@ export default function flip(elements) {
           } catch { /* ignore */ }
         } catch { /* ignore */ }
       });
+
+      // After starting animations, optionally recalculate and store new DOM indices
+      if (opts.recalculateIndices) {
+        elementBoxes.forEach((record) => {
+          record.index = computeDomIndex(record.element, record.index);
+        });
+      }
 
       currentAnimations = animations;
 
