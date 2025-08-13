@@ -20,7 +20,19 @@ export default function flip<T extends HTMLElement[] | NodeListOf<HTMLElement> |
         duration?: number;
         easing?: EasingFunctions;
         delay?: number;
-        stagger?: number | ((index: number, count: number, element: HTMLElement) => number);
+        stagger?: number | ((index: number, count: number, element: HTMLElement) => number) | ((ctx: {
+            element: HTMLElement;
+            from: {
+                parent: HTMLElement | null;
+                index: number;
+                rect: DOMRectReadOnly;
+            };
+            to: {
+                parent: HTMLElement | null;
+                index: number;
+                rect: DOMRectReadOnly;
+            };
+        }) => number);
         fill?: FillMode;
         direction?: PlaybackDirection;
         composite?: CompositeOperation;
@@ -29,6 +41,7 @@ export default function flip<T extends HTMLElement[] | NodeListOf<HTMLElement> |
         transformOrigin?: string;
         epsilon?: number;
         interrupt?: "cancel" | "ignore" | "queue";
+        recalculateIndices?: boolean;
         onStart?: (ctx: {
             options: /*elided*/ any;
             count: number;

@@ -17,17 +17,26 @@
  * @param {T} elements
  */
 export default function flip(elements) {
-  const elementBoxes = Array.from(elements).map((element) => ({
-    element,
-    box: element.getBoundingClientRect(),
-  }));
+  const initialElements = Array.from(elements);
+  const indexMapByParent = buildDomIndexMap(initialElements);
+  const elementBoxes = initialElements.map((element, i) => {
+    const parent = element.parentElement || null;
+    const fromIndex = parent ? (indexMapByParent.get(parent)?.get(element) ?? i) : i;
+    return {
+      element,
+      box: element.getBoundingClientRect(),
+      /** DOM parent and index relative to siblings at time of flip() (fallbacks to provided order) */
+      parent,
+      index: fromIndex,
+    };
+  });
 
   /**
    * @typedef {Object} FlipOptions
    * @property {number} [duration=100]
    * @property {EasingFunctions} [easing='ease']
    * @property {number} [delay=0]
-   * @property {number | ((index: number, count: number, element: HTMLElement) => number)} [stagger=0]
+   * @property {number | ((index: number, count: number, element: HTMLElement) => number) | ((ctx: { element: HTMLElement; from: { parent: HTMLElement | null; index: number; rect: DOMRectReadOnly }; to: { parent: HTMLElement | null; index: number; rect: DOMRectReadOnly } }) => number)} [stagger=0]
    * @property {FillMode} [fill='both']
    * @property {PlaybackDirection} [direction='normal']
    * @property {CompositeOperation} [composite='add']
@@ -36,6 +45,7 @@ export default function flip(elements) {
    * @property {string} [transformOrigin='0 0']
    * @property {number} [epsilon=0.5]
    * @property {'cancel'|'ignore'|'queue'} [interrupt='cancel']
+   * @property {boolean} [recalculateIndices=false]
    * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onStart]
    * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachStart]
    * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachFinish]
@@ -74,6 +84,35 @@ export default function flip(elements) {
     return Number.isFinite(n) ? n : null;
   }
 
+  /**
+   * Build maps of DOM indices per parent for provided elements.
+   * @param {HTMLElement[]} els
+   * @returns {Map<HTMLElement, Map<Element, number>>}
+   */
+  function buildDomIndexMap(els) {
+    /** @type {Map<HTMLElement, Map<Element, number>>} */
+    const parentToIndex = new Map();
+    try {
+      /** @type {Map<HTMLElement, true>} */
+      const parents = new Map();
+      for (let i = 0; i < els.length; i += 1) {
+        const p = els[i]?.parentElement || null;
+        if (p) parents.set(p, true);
+      }
+      parents.forEach((_, parent) => {
+        const map = new Map();
+        const children = parent.children;
+        for (let i = 0; i < children.length; i += 1) {
+          map.set(children[i], i);
+        }
+        parentToIndex.set(parent, map);
+      });
+    } catch {
+      // ignore; return what we have (possibly empty)
+    }
+    return parentToIndex;
+  }
+
   function measure() {
     elementBoxes.forEach((record) => {
       record.box = record.element.getBoundingClientRect();
@@ -88,9 +127,12 @@ export default function flip(elements) {
   function update(newElements) {
     if (newElements) {
       const next = Array.from(newElements);
+      const idxMapByParent = buildDomIndexMap(next);
       elementBoxes.length = 0;
-      next.forEach((element) => {
-        elementBoxes.push({ element, box: element.getBoundingClientRect() });
+      next.forEach((element, i) => {
+        const parent = element.parentElement || null;
+        const idx = parent ? (idxMapByParent.get(parent)?.get(element) ?? i) : i;
+        elementBoxes.push({ element, box: element.getBoundingClientRect(), parent, index: idx });
       });
     } else {
       measure();
@@ -126,6 +168,7 @@ export default function flip(elements) {
       epsilon: 0.5,
       /** @type {'cancel'|'ignore'|'queue'} */
       interrupt: 'cancel',
+      recalculateIndices: false,
     };
 
     const opts = { ...defaultOptions, ...(options || {}) };
@@ -175,12 +218,16 @@ export default function flip(elements) {
       const runId = ++activeRunId;
 
       // Phase 1: reads
-      const entries = elementBoxes.map((record, index) => ({
+      const entries = elementBoxes.map((record) => ({
         element: record.element,
-        index,
+        index: record.index,
+        parent: record.parent,
         prevBox: record.box,
         nowBox: record.element.getBoundingClientRect(),
       }));
+
+      // Precompute current indices per parent for "to" state
+      const toIdxMapByParent = buildDomIndexMap(elementBoxes.map((r) => r.element));
 
       // Phase 2: compute
       const computed = entries.map((entry) => {
@@ -216,11 +263,38 @@ export default function flip(elements) {
       // Phase 3: writes and start animations
       const count = computed.length;
       const baseDelay = opts.delay || 0;
-      /** @type {(i: number, c: number, el: HTMLElement) => number} */
-      const staggerResolver =
-        typeof opts.stagger === 'function'
-          ? (i, c, el) => baseDelay + /** @type {Exclude<FlipOptions['stagger'], number>} */ (opts.stagger)(i, c, el)
-          : (i) => baseDelay + i * (/** @type {number} */ (opts.stagger) || 0);
+
+      /** Resolve per-element delay */
+      function resolveDelayFor(c) {
+        const el = c.entry.element;
+        const fromParent = c.entry.parent || el.parentElement || null;
+        const fromIndex = c.entry.index;
+        const toParent = el.parentElement || null;
+        const toIndex = toParent ? (toIdxMapByParent.get(toParent)?.get(el) ?? fromIndex) : fromIndex;
+
+        /** @type {number} */
+        let resolved = 0;
+        if (typeof opts.stagger === 'number') {
+          resolved = (/** @type {number} */ (opts.stagger) || 0) * fromIndex;
+        } else if (typeof opts.stagger === 'function') {
+          const fn = /** @type {Function} */ (opts.stagger);
+          if (fn.length <= 1) {
+            // New API: single context argument
+            const ctx = {
+              element: el,
+              from: { parent: fromParent, index: fromIndex, rect: c.entry.prevBox },
+              to: { parent: toParent, index: toIndex, rect: c.entry.nowBox },
+            };
+            const v = Number(fn(ctx));
+            resolved = Number.isFinite(v) ? v : 0;
+          } else {
+            // Legacy API: (index, count, element)
+            const v = Number(fn(fromIndex, count, el));
+            resolved = Number.isFinite(v) ? v : 0;
+          }
+        }
+        return baseDelay + resolved;
+      }
 
       computed.forEach((c) => {
         if (c.isNegligible) return;
@@ -239,7 +313,7 @@ export default function flip(elements) {
 
         try {
           c.entry.element.style.willChange = 'transform';
-          const delay = staggerResolver(c.entry.index, count, c.entry.element);
+          const delay = resolveDelayFor(c);
           // Per-element overrides via data attributes
           // data-flip-duration: absolute duration in ms for this element
           // data-flip-duration-offset: added to options.duration; ignored if data-flip-duration is present
@@ -283,6 +357,17 @@ export default function flip(elements) {
           } catch { /* ignore */ }
         } catch { /* ignore */ }
       });
+
+      // After starting animations, optionally recalculate and store new DOM indices using the multi-parent map
+      if (opts.recalculateIndices) {
+        const idxMap = toIdxMapByParent;
+        elementBoxes.forEach((record) => {
+          const p = record.element.parentElement || null;
+          record.parent = p;
+          const nextIndex = p ? idxMap.get(p)?.get(record.element) : undefined;
+          if (typeof nextIndex === 'number') record.index = nextIndex;
+        });
+      }
 
       currentAnimations = animations;
 
