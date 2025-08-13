@@ -89,10 +89,6 @@ export default function flip(elements) {
       const firstWithParent = els.find((el) => !!el && !!el.parentElement) || null;
       const parent = firstWithParent ? firstWithParent.parentElement : null;
       if (!parent) return new Map();
-      // Ensure common parent
-      for (let i = 0; i < els.length; i += 1) {
-        if (els[i].parentElement !== parent) return new Map();
-      }
       const map = new Map();
       const children = parent.children;
       for (let i = 0; i < children.length; i += 1) {
