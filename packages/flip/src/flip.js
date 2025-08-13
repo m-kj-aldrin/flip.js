@@ -330,16 +330,22 @@ export default function flip(elements) {
           resolved = /** @type {number} */ ((opts.stagger) || 0) * fromIndex;
         } else if (typeof opts.stagger === 'function') {
           const fn = /** @type {Function} */ (opts.stagger);
-          // Functional API: single context argument
-          /** @type {FlipStaggerContext} */
-          const ctx = {
-            element: el,
-            from: { parent: fromParent, index: fromIndex, rect: c.entry.prevBox },
-            to: { parent: toParent, index: toIndex, rect: c.entry.nowBox },
-            isPrimary: runPrimary.has(el),
-          };
-          const v = Number(fn(ctx));
-          resolved = Number.isFinite(v) ? v : 0;
+          // Back-compat: support (index, count) signature when function arity >= 2
+          if (fn.length >= 2) {
+            const v = Number(fn(fromIndex, count));
+            resolved = Number.isFinite(v) ? v : 0;
+          } else {
+            // Modern API: single context argument
+            /** @type {FlipStaggerContext} */
+            const ctx = {
+              element: el,
+              from: { parent: fromParent, index: fromIndex, rect: c.entry.prevBox },
+              to: { parent: toParent, index: toIndex, rect: c.entry.nowBox },
+              isPrimary: runPrimary.has(el),
+            };
+            const v = Number(fn(ctx));
+            resolved = Number.isFinite(v) ? v : 0;
+          }
         }
         return baseDelay + resolved;
       }

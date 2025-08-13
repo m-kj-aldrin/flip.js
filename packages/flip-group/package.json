@@ -1,0 +1,28 @@
+{
+  "name": "@mkja/flip-group",
+  "version": "0.1.0",
+  "description": "Declarative FLIP custom element",
+  "type": "module",
+  "license": "MIT",
+  "exports": "./src/flip-group.js",
+  "main": "./src/flip-group.js",
+  "module": "./src/flip-group.js",
+  "types": "./types/index.d.ts",
+  "files": [
+    "src",
+    "types",
+    "README.md"
+  ],
+  "sideEffects": true,
+  "scripts": {
+    "build:types": "tsc -p tsconfig.types.json",
+    "build": "npm run build:types",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@mkja/flip": "^0.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

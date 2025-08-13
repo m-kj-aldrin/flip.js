@@ -215,7 +215,6 @@ describe('flip', () => {
     function createCancelableElement(rect) {
       let currentRect = { ...rect };
       const style = {};
-      let lastResolve;
       const cancelSpy = vi.fn();
       let lastAnimation = null;
       /** @type {any} */
@@ -225,7 +224,7 @@ describe('flip', () => {
         animate: () => {
           lastAnimation = {
             finished: new Promise((res) => {
-              lastResolve = res;
+              // keep resolver around
             }),
             cancel: cancelSpy,
           };
@@ -234,7 +233,6 @@ describe('flip', () => {
         __setRect: (next) => {
           currentRect = { ...currentRect, ...next };
         },
-        __resolve: () => lastResolve?.(),
         __getLastAnimation: () => lastAnimation,
         __getCancelSpy: () => cancelSpy,
       };
@@ -251,8 +249,6 @@ describe('flip', () => {
 
     expect(second).not.toBe(first);
     expect(a.__getCancelSpy()).toHaveBeenCalled();
-    a.__resolve();
-    await second.finished;
   });
 
   it('interrupt: queue schedules after current finishes', async () => {

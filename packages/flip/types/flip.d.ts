@@ -32,6 +32,7 @@ export default function flip<T extends HTMLElement[] | NodeListOf<HTMLElement> |
                 index: number;
                 rect: DOMRectReadOnly;
             };
+            isPrimary: boolean;
         }) => number);
         fill?: FillMode;
         direction?: PlaybackDirection;

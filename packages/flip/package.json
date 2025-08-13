@@ -1,0 +1,25 @@
+{
+  "name": "@mkja/flip",
+  "version": "0.1.0",
+  "description": "Tiny FLIP animation utility (translate + optional scale) with Promise-based play and reduced-motion support.",
+  "type": "module",
+  "license": "MIT",
+  "exports": "./src/flip.js",
+  "main": "./src/flip.js",
+  "module": "./src/flip.js",
+  "types": "./types/index.d.ts",
+  "files": [
+    "src",
+    "types",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build:types": "tsc -p tsconfig.types.json",
+    "build": "npm run build:types",
+    "prepare": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
