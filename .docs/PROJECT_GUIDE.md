@@ -13,6 +13,7 @@
   - Source in `packages/flip/src/`. Types generated to `packages/flip/types/`.
 - **`@mkja/flip-group` (custom element)**
   - Defines and registers `customElements.define('flip-group', FlipGroup)`.
+  - Public surface: `flip(mutator)` and `markPrimary(el)` methods; listens for `flip:request` event; configures via attributes (`selector`, `stagger`, etc.).
   - Depends on `@mkja/flip` and uses it internally; no bundling of the core.
   - Source in `packages/flip-group/src/`. Types generated to `packages/flip-group/types/`.
 
