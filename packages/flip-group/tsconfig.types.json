@@ -3,6 +3,6 @@
   "compilerOptions": {
     "outDir": "./types"
   },
-  "include": ["src/index.js", "src/flip-group.js", "src/flip-group.d.ts"],
-  "exclude": ["**/*.test.js", "**/__tests__/**"]
+  "include": ["src/index.js", "src/flip-group.js"],
+  "exclude": []
 }

@@ -1,4 +1,4 @@
-import '../../flip/src/index.js';
+import '@mkja/flip';
 import '../src/index.js';
 
 /** @type {import('../src/flip-group.js').FlipGroup} */
@@ -42,7 +42,7 @@ btnSwap?.addEventListener('click', () => {
   }
 });
 
-btnShuffle?.addEventListener('change', () => {
+btnShuffle?.addEventListener('click', () => {
   const items = Array.from(listA.querySelectorAll('[data-flip]'));
   if (items.length < 2) return;
   for (let i = items.length - 1; i > 0; i -= 1) {

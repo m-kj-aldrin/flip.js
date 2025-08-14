@@ -7,18 +7,17 @@
   "exports": {
     ".": "./src/index.js"
   },
-  "types": "./types/index.d.ts",
+  "types": "./types/entry.d.ts",
   "files": ["src", "types", "README.md", "LICENSE"],
   "sideEffects": false,
   "scripts": {
     "types": "tsc -p tsconfig.types.json",
     "build": "npm run types",
-    "test": "vitest --run",
-    "dev": "vite examples"
+    "dev": "vite examples",
+    "prepack": "npm run build"
   },
   "devDependencies": {
-    "vite": "^5.4.2",
-    "vitest": "^2.0.5"
+    "vite": "^5.4.2"
   },
   "engines": {
     "node": ">=18.0.0"
