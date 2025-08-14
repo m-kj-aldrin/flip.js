@@ -163,7 +163,7 @@ describe('flip', () => {
     b.__setRect({ left: 15 });
     c.__setRect({ left: 25 });
 
-    const stagger = (i, count) => (count - i) * 10; // 30,20,10
+    const stagger = (ctx) => (3 - ctx.from.index) * 10; // 30,20,10 for indices 0,1,2
     await ctrl.play({ duration: 10, delay: 100, stagger }).finished;
 
     expect(a.__getAnimateCalls()[0].options.delay).toBe(130);

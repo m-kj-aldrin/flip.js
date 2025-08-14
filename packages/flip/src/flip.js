@@ -334,13 +334,7 @@ export default function flip(elements) {
             to: { parent: toParent, index: toIndex, rect: c.entry.nowBox },
             isPrimary: runPrimary.has(el),
           };
-          let v;
-          // Support both signatures: (ctx) and (index, count)
-          if (fn.length >= 2) {
-            v = Number(fn(fromIndex, count));
-          } else {
-            v = Number(fn(ctx));
-          }
+          const v = Number(fn(ctx));
           resolved = Number.isFinite(v) ? v : 0;
         }
         return baseDelay + resolved;

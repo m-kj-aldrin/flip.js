@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>flip (core)</title>
+    <script type="module" src="/index.js"></script>
+    <style>
+      body { font-family: monospace; }
+      ul:first-child { margin-block: 0; }
+      ul { list-style-type: none; max-width: max-content; padding: 0; margin: 0; }
+      li { margin-top: 2px; padding: 2px; border: 1px currentColor solid; border-radius: 2px; }
+      .controls { margin-bottom: 8px; }
+      .lists { display: flex; gap: 16px; }
+    </style>
+  </head>
+  <body>
+    <div class="controls">
+      <button id="swap-between">Swap random between lists</button>
+    </div>
+    <div class="lists">
+      <ul id="list-a"></ul>
+      <ul id="list-b"></ul>
+    </div>
+  </body>
+</html>
+
+

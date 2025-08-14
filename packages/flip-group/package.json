@@ -20,7 +20,8 @@
   "scripts": {
     "types": "tsc -p tsconfig.types.json",
     "build": "npm run types",
-    "test": "vitest --run"
+    "test": "vitest --run",
+    "dev": "vite examples"
   },
   "engines": {
     "node": ">=18.0.0"
