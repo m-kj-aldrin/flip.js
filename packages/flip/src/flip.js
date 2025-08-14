@@ -232,11 +232,8 @@ export default function flip(elements) {
       // 'queue' handled after we define startRun
     }
 
-    const prefersReduced =
-      !!opts.respectReducedMotion &&
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mm = typeof globalThis !== 'undefined' && typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia : (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia : null);
+    const prefersReduced = !!opts.respectReducedMotion && !!mm && mm('(prefers-reduced-motion: reduce)').matches;
 
     if (prefersReduced || (opts.duration || 0) <= 0) {
       // No-op animation: immediately refresh measurements so next play works correctly
@@ -330,7 +327,6 @@ export default function flip(elements) {
           resolved = /** @type {number} */ ((opts.stagger) || 0) * fromIndex;
         } else if (typeof opts.stagger === 'function') {
           const fn = /** @type {Function} */ (opts.stagger);
-          // Functional API: single context argument
           /** @type {FlipStaggerContext} */
           const ctx = {
             element: el,

@@ -1,4 +1,5 @@
-import '../src/flip-group.js';
+import '@mkja/flip';
+import '../src/index.js';
 
 /** @type {import('../src/flip-group.js').FlipGroup} */
 const group = /** @type {any} */ (document.getElementById('group'));
@@ -13,13 +14,9 @@ const btnShuffle = /** @type {any} */ (document.getElementById('shuffle'));
 /** @type {HTMLSelectElement} */
 const selectStagger = /** @type {any} */ (document.getElementById('stg'));
 
-// Enable debug logs by default for troubleshooting
 try {
   group?.setAttribute('debug', '');
-  console.log('[declarative-demo] boot, debug enabled');
-} catch {
-  /* ignore */
-}
+} catch {}
 
 function randChild(parent) {
   const c = parent.querySelectorAll('[data-flip]');
@@ -48,7 +45,6 @@ btnSwap?.addEventListener('click', () => {
 btnShuffle?.addEventListener('click', () => {
   const items = Array.from(listA.querySelectorAll('[data-flip]'));
   if (items.length < 2) return;
-  // simple Fisher-Yates
   for (let i = items.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     if (i !== j) listA.insertBefore(items[i], items[j]);

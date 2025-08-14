@@ -1,4 +1,4 @@
-import flip from './flip.js';
+import { flip } from '@mkja/flip';
 
 /**
  * Declarative FLIP custom element.
@@ -274,13 +274,12 @@ export class FlipGroup extends HTMLElement {
             /* ignore */
           }
         });
+        // Rebase FIRST to LAST after animations finish
+        this._refreshFirst();
+        this._pending = false;
+        this._log('flush: end, FIRST rebased');
       },
     });
-
-    // Rebase FIRST to LAST after starting
-    this._refreshFirst();
-    this._pending = false;
-    this._log('flush: end, FIRST rebased');
   }
 
   _items() {

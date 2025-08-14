@@ -1,6 +1,35 @@
-### flip-group: Declarative FLIP custom element
+# @mkja/flip-group
+
+Declarative FLIP custom element built on `@mkja/flip`.
 
 A custom element that animates reorders/adds/removes of descendant items using the FLIP technique, without imperative orchestration.
+
+## Install
+
+```bash
+npm i @mkja/flip-group @mkja/flip
+```
+
+## Quick start
+
+```html
+<flip-group selector="li" stagger="proximity" stagger-step="60" duration="500" respect-reduced-motion="false">
+  <ul>
+    <li data-flip>Item A</li>
+    <li data-flip>Item B</li>
+  </ul>
+</flip-group>
+<script type="module">
+  import '@mkja/flip-group';
+  const group = document.querySelector('flip-group');
+  const list = group.querySelector('ul');
+  // Mark and move an item
+  const li = list.querySelector('[data-flip]');
+  group.markPrimary(li);
+  list.appendChild(li);
+  // Mutations to the list trigger FLIP animations automatically
+</script>
+```
 
 ## Purpose
 - Provide a declarative surface for FLIP: measure first (FIRST), mutate, measure last (LAST), invert, play.
@@ -27,7 +56,7 @@ A custom element that animates reorders/adds/removes of descendant items using t
 4. Flush → seed transforms → `flip(items)` → play → rebase FIRST.
 
 ## API surface
-- **Attributes** (on `<flip-group>`):
+- **Attributes** (on `\<flip-group>`):
   - `selector` (default `li`): which descendants to animate.
   - `stagger`: `index` | `proximity` | number (ms per step).
   - `stagger-step`: step (ms) for `index`/`proximity` presets.
@@ -51,23 +80,12 @@ A custom element that animates reorders/adds/removes of descendant items using t
 - Respect OS reduced motion by default; override via `respect-reduced-motion="false"` if desired.
 - Enable `debug` to see lifecycle logs: RO refresh, MO detection, flush start/end, primaries, options, stagger, play.
 
-## Quick start
-```html
-<flip-group selector="li" stagger="proximity" stagger-step="60" duration="500" respect-reduced-motion="false">
-  <ul>
-    <li data-flip>Item A</li>
-    <li data-flip>Item B</li>
-  </ul>
-</flip-group>
-<script type="module">
-  import './src/flip-group.js';
-  const group = document.querySelector('flip-group');
-  const list = group.querySelector('ul');
-  // Mark and move an item
-  const li = list.querySelector('[data-flip]');
-  group.markPrimary(li);
-  list.appendChild(li);
-</script>
+## Basic usage
+
+```js
+import '@mkja/flip-group';
 ```
 
-
+```html
+<flip-group selector="li" stagger="proximity" duration="300"></flip-group>
+```
