@@ -5,6 +5,11 @@
  */
 
 /**
+ * A collection of HTML elements, such as an array, NodeListOf, or HTMLCollection.
+ * @typedef {HTMLElement[] | NodeListOf<HTMLElement> | HTMLCollectionOf<HTMLElement>} ElementCollection
+ */
+
+/**
  * Minimal FLIP utility with translation and optional scale, Promise-based play,
  * reduced-motion support, and basic controls.
  *
@@ -13,7 +18,7 @@
  *   // ...mutate DOM (reorder/insert/remove)
  *   await ctrl.play({ duration: 300 }).finished;
  *
- * @template {HTMLElement[]  | NodeListOf<HTMLElement> | HTMLCollectionOf<HTMLElement> } T
+ * @template {ElementCollection} T
  * @param {T} elements
  */
 export default function flip(elements) {
@@ -32,6 +37,39 @@ export default function flip(elements) {
   });
 
   /**
+   * Behavior for handling concurrent `play()` calls.
+   * - `cancel`: The current animation is cancelled before the new one starts.
+   * - `ignore`: The new `play()` call is ignored.
+   * - `queue`: The new `play()` call starts after the current one finishes.
+   * @typedef {'cancel'|'ignore'|'queue'} InterruptMode
+   */
+
+  /**
+   * Computed transform deltas for an element.
+   * @typedef {Object} FlipDelta
+   * @property {number} dx
+   * @property {number} dy
+   * @property {number} scaleX
+   * @property {number} scaleY
+   */
+
+  /**
+   * @typedef {Object} FlipLifecycleContext
+   * @property {FlipOptions} options
+   * @property {number} count
+   * @property {Animation[]} animations
+   */
+
+  /**
+   * @typedef {Object} FlipEventDetail
+   * @property {HTMLElement} element
+   * @property {number} index
+   * @property {DOMRectReadOnly} prevBox
+   * @property {DOMRectReadOnly} nowBox
+   * @property {FlipDelta} delta
+   */
+
+  /**
    * @typedef {Object} FlipOptions
    * @property {number} [duration=100]
    * @property {EasingFunctions} [easing='ease']
@@ -44,12 +82,20 @@ export default function flip(elements) {
    * @property {boolean} [respectReducedMotion=true]
    * @property {string} [transformOrigin='0 0']
    * @property {number} [epsilon=0.5]
-   * @property {'cancel'|'ignore'|'queue'} [interrupt='cancel']
+   * @property {InterruptMode} [interrupt='cancel']
    * @property {boolean} [recalculateIndices=false]
-   * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onStart]
-   * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachStart]
-   * @property {(entry: { element: HTMLElement; index: number; prevBox: DOMRectReadOnly; nowBox: DOMRectReadOnly; delta: { dx: number; dy: number; scaleX: number; scaleY: number } }, ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onEachFinish]
-   * @property {(ctx: { options: FlipOptions; count: number; animations: Animation[] }) => void} [onFinish]
+   * @property {(ctx: FlipLifecycleContext) => void} [onStart]
+   * @property {(detail: FlipEventDetail, ctx: FlipLifecycleContext) => void} [onEachStart]
+   * @property {(detail: FlipEventDetail, ctx: FlipLifecycleContext) => void} [onEachFinish]
+   * @property {(ctx: FlipLifecycleContext) => void} [onFinish]
+   */
+
+  /**
+   * Represents the measured state of an element at a point in time (before or after DOM mutation).
+   * @typedef {Object} FlipPositionState
+   * @property {HTMLElement | null} parent
+   * @property {number} index
+   * @property {DOMRectReadOnly} rect
    */
 
   /**
@@ -57,9 +103,17 @@ export default function flip(elements) {
    * Consumers can use `isPrimary` to detect elements explicitly marked via controller.markPrimary().
    * @typedef {Object} FlipStaggerContext
    * @property {HTMLElement} element
-   * @property {{ parent: HTMLElement | null; index: number; rect: DOMRectReadOnly }} from
-   * @property {{ parent: HTMLElement | null; index: number; rect: DOMRectReadOnly }} to
+   * @property {FlipPositionState} from
+   * @property {FlipPositionState} to
    * @property {boolean} isPrimary
+   */
+
+  /**
+   * Return value from `play()`, providing controls for the running animation.
+   * @typedef {Object} FlipPlaybackControls
+   * @property {Animation[]} animations
+   * @property {Promise<void>} finished
+   * @property {() => void} cancel
    */
 
   /** @type {Animation[]} */
@@ -67,7 +121,7 @@ export default function flip(elements) {
   let disconnected = false;
   // Concurrency tracking
   let activeRunId = 0;
-  /** @type {null | { runId: number; hasQueued?: boolean; queuedStarter?: () => { animations: Animation[]; finished: Promise<void>; cancel: () => void }; result: { animations: Animation[]; finished: Promise<void>; cancel: () => void } }} */
+  /** @type {null | { runId: number; hasQueued?: boolean; queuedStarter?: () => FlipPlaybackControls; result: FlipPlaybackControls }} */
   let inFlight = null;
   /**
    * Elements explicitly marked as primary (programmatically moved) for the next run.
@@ -137,7 +191,7 @@ export default function flip(elements) {
   }
 
   /**
-   * @template {HTMLElement[] | NodeListOf<HTMLElement> | HTMLCollectionOf<HTMLElement>} U
+   * @template {ElementCollection} U
    * @param {U} [newElements]
    */
   function update(newElements) {
@@ -188,7 +242,7 @@ export default function flip(elements) {
 
   /**
    * @param {FlipOptions} [options]
-   * @returns {{ animations: Animation[]; finished: Promise<void>; cancel: () => void; }}
+   * @returns {FlipPlaybackControls}
    */
   function play(options) {
     /** @type {FlipOptions} */
@@ -204,7 +258,7 @@ export default function flip(elements) {
       respectReducedMotion: true,
       transformOrigin: '0 0',
       epsilon: 0.5,
-      /** @type {'cancel'|'ignore'|'queue'} */
+      /** @type {InterruptMode} */
       interrupt: 'cancel',
       recalculateIndices: false,
     };
@@ -293,7 +347,7 @@ export default function flip(elements) {
           Math.abs(scaleX - 1) < 0.01 &&
           Math.abs(scaleY - 1) < 0.01;
 
-        return { entry, dx, dy, scaleX, scaleY, isNegligible };
+        return { entry, dx, dy, scaleX, scaleY, isNegligible, delta: { dx, dy, scaleX, scaleY } };
       });
 
       /** @type {Animation[]} */
@@ -396,7 +450,7 @@ export default function flip(elements) {
                 index: c.entry.index,
                 prevBox: c.entry.prevBox,
                 nowBox: c.entry.nowBox,
-                delta: { dx: c.dx, dy: c.dy, scaleX: c.scaleX, scaleY: c.scaleY },
+                delta: c.delta,
               },
               { options: opts, count, animations },
             );
@@ -438,7 +492,7 @@ export default function flip(elements) {
                   index: c.entry.index,
                   prevBox: c.entry.prevBox,
                   nowBox: c.entry.nowBox,
-                  delta: { dx: c.dx, dy: c.dy, scaleX: c.scaleX, scaleY: c.scaleY },
+                  delta: c.delta,
                 },
                 { options: opts, count: animMeta.length, animations },
               );
@@ -491,7 +545,7 @@ export default function flip(elements) {
     if (opts.interrupt === 'queue' && inFlight) {
       // Chain after current run; ensure we don't start twice
       inFlight.hasQueued = true;
-      /** @type {(value: { animations: Animation[]; finished: Promise<void>; cancel: () => void }) => void} */
+      /** @type {(value: FlipPlaybackControls) => void} */
       let resolveStarted;
       const startedPromise = new Promise((res) => {
         resolveStarted = res;
