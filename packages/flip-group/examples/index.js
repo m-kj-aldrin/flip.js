@@ -54,17 +54,15 @@ btnShuffle?.addEventListener('click', () => {
           const items = Array.from(listA.querySelectorAll('[data-flip]'));
           if (items.length < 2) return;
 
-          // Fisher-Yates shuffle the array
           for (let i = items.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [items[i], items[j]] = [items[j], items[i]];
           }
 
-          // Re-append to the DOM in shuffled order
           items.forEach((item) => listA.appendChild(item));
         },
       },
-    }),
+    })
   );
 });
 
@@ -72,5 +70,3 @@ selectStagger?.addEventListener('change', () => {
   const v = selectStagger.value;
   group.setAttribute('stagger', v);
 });
-
-
