@@ -1,4 +1,3 @@
-import '@mkja/flip';
 import '../src/index.js';
 
 /** @type {import('../src/flip-group.js').FlipGroup} */
@@ -28,32 +27,46 @@ btnSwap?.addEventListener('click', () => {
   const a = randChild(listA);
   const b = randChild(listB);
   if (!a && !b) return;
-  if (a) {
-    group.markPrimary(a);
-    const idx = Math.floor(Math.random() * (listB.children.length + 1));
-    const ref = listB.children[idx] || null;
-    listB.insertBefore(a, ref);
-  }
-  if (b) {
-    group.markPrimary(b);
-    const idx = Math.floor(Math.random() * (listA.children.length + 1));
-    const ref = listA.children[idx] || null;
-    listA.insertBefore(b, ref);
-  }
+
+  if (a) group.markPrimary(a);
+  if (b) group.markPrimary(b);
+
+  group.flip(() => {
+    if (a) {
+      const idx = Math.floor(Math.random() * (listB.children.length + 1));
+      const ref = listB.children[idx] || null;
+      listB.insertBefore(a, ref);
+    }
+    if (b) {
+      const idx = Math.floor(Math.random() * (listA.children.length + 1));
+      const ref = listA.children[idx] || null;
+      listA.insertBefore(b, ref);
+    }
+  });
 });
 
 btnShuffle?.addEventListener('click', () => {
-  const items = Array.from(listA.querySelectorAll('[data-flip]'));
-  if (items.length < 2) return;
-  for (let i = items.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    if (i !== j) listA.insertBefore(items[i], items[j]);
-  }
+  listA.dispatchEvent(
+    new CustomEvent('flip:request', {
+      bubbles: true,
+      detail: {
+        mutator: () => {
+          const items = Array.from(listA.querySelectorAll('[data-flip]'));
+          if (items.length < 2) return;
+
+          for (let i = items.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [items[i], items[j]] = [items[j], items[i]];
+          }
+
+          items.forEach((item) => listA.appendChild(item));
+        },
+      },
+    })
+  );
 });
 
 selectStagger?.addEventListener('change', () => {
   const v = selectStagger.value;
   group.setAttribute('stagger', v);
 });
-
-
